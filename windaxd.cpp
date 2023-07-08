@@ -9,6 +9,27 @@
 
 #define predkosc 4
 
+class osoba
+{
+public:
+    osoba(int x, int y, int cel)
+    {
+        this->cel = cel;
+        this->x = x;
+        this->y = y;
+        this->waga = 70;
+        this->kierunek = 's';//s-stop,g-gora,d-dol,l-lewo,p-pizda
+        
+    }
+    int x;
+    int y;
+    int cel;
+    int waga;
+    char kierunek;
+    int xCel;
+};
+
+std::vector<osoba> kolejka[5];
 
 class WINDA {
     public:
@@ -28,16 +49,63 @@ class WINDA {
         return cel;
     }
 
-    void ruch() {
-        if (stop == 1) return;
+    void ruch(std::vector<osoba> *kolejka) {
+              
+       
         if (y < cel * 125 - predkosc) y += predkosc;
         else if (y > cel * 125 + predkosc) y -= predkosc;
         else {
             pietro = cel;
             stop = 1;
-        }
-    }
+            for (auto& osoba : kolejka[pietro])
+            {
+                if (osoba.kierunek == 's')
+                {
+                    if (pietro % 2 == 0)
+                    {
+                        osoba.kierunek = 'p';
+                        osoba.xCel = osoba.x + 250;
+                    }
+                    else
+                    {
+                        osoba.kierunek = 'l';
+                        osoba.xCel = osoba.x - 250;
+                    }
+                }
+                    
 
+            }
+        }
+        for (auto& osoba : kolejka[pietro])
+        {
+            switch (osoba.kierunek)
+            {
+            case 'l':
+                osoba.x -= predkosc;
+                if (osoba.x <= osoba.xCel)
+                {
+                    osobywwindzie.push_back(osoba);
+                }break;
+            case 'p':
+                osoba.x += predkosc;
+                if (osoba.x >= osoba.xCel)
+                {
+                    osobywwindzie.push_back(osoba);
+                }break;
+            }
+
+        }
+        //algorytm usuwajacy ludki z windy
+        kolejka[pietro].erase(
+            std::remove_if(
+                kolejka[pietro].begin(),
+                kolejka[pietro].end(),
+                [](osoba const& osoba) { return (osoba.x <= osoba.xCel && osoba.kierunek== 'l') || (osoba.x >= osoba.xCel && osoba.kierunek =='p'); }
+            ),
+            kolejka[pietro].end()
+        );
+    }
+    std::vector<osoba> osobywwindzie;
     int y;
     bool kierunek;
     bool stop;
@@ -46,6 +114,7 @@ class WINDA {
     int pietro;
     int cel;
 };
+
 
 
 
@@ -63,7 +132,19 @@ LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
 void Rysuj(HDC HDC);
+void przycisk(int buttonid)
+{
+    int cel;
+    int pietro;
+    cel = buttonid % 10;
+    pietro = buttonid / 10;
+    int x = (pietro % 2) * 600;
+    int y = 625 - (pietro / 2) * 2 * 125 - (pietro % 2) * 125 - 512 / 6;
+    osoba ludek(x, y, cel);
+    kolejka[pietro].push_back(ludek);
+    winda.wybierz_pietro(pietro);
 
+}
 
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
@@ -225,7 +306,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 for (int przycisk_i = 4; przycisk_i >= 0; przycisk_i--) {
                     int pietro = abs(i - 4);
                     if (pietro == przycisk_i) continue;
-                    if (wmId == pietro * 10 + przycisk_i) winda.wybierz_pietro(wmId % 10);
+                    if (wmId == pietro * 10 + przycisk_i) 
+                    przycisk(wmId);
+
                 }
             }
             // Analizuj zaznaczenia menu:
@@ -248,7 +331,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     case WM_TIMER:
     {
-        winda.ruch();
+        winda.ruch(kolejka);
         InvalidateRect(hWnd, NULL, TRUE);
 
     }
@@ -311,21 +394,36 @@ const Point pd(450, 625);
 void Rysuj(HDC HDC) {
     int xxx = winda.y;
     Graphics grafika(HDC);
-    Pen winda(Color(255, 0, 0, 0), 7);
-    Pen ludek(Color(255, 255, 182, 193), 7);
-    Pen pietro(Color(255, 125, 200, 0), 6);
+    Pen windak(Color(255, 0, 0, 0), 7);
+    Pen pietrok(Color(255, 125, 200, 0), 6);
 
-    grafika.DrawLine(&pietro, 0, 125, 225, 125);
-    grafika.DrawLine(&pietro, 450, 250, 675, 250);
-    grafika.DrawLine(&pietro, 0, 375, 225, 375);
-    grafika.DrawLine(&pietro, 450, 500, 675, 500);
-    grafika.DrawLine(&pietro, 0, 625, 225, 625);
+    grafika.DrawLine(&pietrok, 0, 125, 225, 125);
+    grafika.DrawLine(&pietrok, 450, 250, 675, 250);
+    grafika.DrawLine(&pietrok, 0, 375, 225, 375);
+    grafika.DrawLine(&pietrok, 450, 500, 675, 500);
+    grafika.DrawLine(&pietrok, 0, 625, 225, 625);
 
-    grafika.DrawLine(&winda, ld.X, ld.Y - xxx, lg.X, lg.Y - xxx);
-    grafika.DrawLine(&winda, lg.X, lg.Y - xxx, pg.X, pg.Y - xxx);
-    grafika.DrawLine(&winda, pg.X, pg.Y - xxx, pd.X, pd.Y - xxx);
-    grafika.DrawLine(&winda, pd.X, pd.Y - xxx, ld.X, ld.Y - xxx);
+    grafika.DrawLine(&windak, ld.X, ld.Y - xxx, lg.X, lg.Y - xxx);
+    grafika.DrawLine(&windak, lg.X, lg.Y - xxx, pg.X, pg.Y - xxx);
+    grafika.DrawLine(&windak, pg.X, pg.Y - xxx, pd.X, pd.Y - xxx);
+    grafika.DrawLine(&windak, pd.X, pd.Y - xxx, ld.X, ld.Y - xxx);
+
+    Bitmap ludzik(L"ludzik.png");
+    for (int i = 0; i < 5; i++)
+    {
+        for (auto ludek : kolejka[i])
+        {
+            Rect kontener(ludek.x, ludek.y, ludzik.GetWidth() / 7, ludzik.GetHeight() / 6);
+            grafika.DrawImage(&ludzik, kontener);
+        }
+    }
+    for (auto ludek : winda.osobywwindzie)
+    {
+        Rect kontener(ludek.x, ludek.y, ludzik.GetWidth() / 7, ludzik.GetHeight() / 6);
+        grafika.DrawImage(&ludzik, kontener);
+    }
 };
+
 
 
 
