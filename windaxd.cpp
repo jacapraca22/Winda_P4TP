@@ -7,7 +7,7 @@
 #define MAX_LOADSTRING 100
 
 
-#define predkosc 4
+#define predkosc 5
 
 class osoba
 {
@@ -18,7 +18,7 @@ public:
         this->x = x;
         this->y = y;
         this->waga = 70;
-        this->kierunek = 's';//s-stop,g-gora,d-dol,l-lewo,p-pizda
+        this->kierunek = 's';//s-stop,g-gora,d-dol,l-lewo,p-prawo
         
     }
     int x;
@@ -40,7 +40,6 @@ class WINDA {
         waga = 0;
         cel = 0;
         pietro = 0;
-
     }
 
     int wybierz_pietro(int cel) {
@@ -52,8 +51,18 @@ class WINDA {
     void ruch(std::vector<osoba> *kolejka) {
               
        
-        if (y < cel * 125 - predkosc) y += predkosc;
-        else if (y > cel * 125 + predkosc) y -= predkosc;
+        if (y < cel * 125 - predkosc) {
+            y += predkosc;
+            for (auto& osoba : osobywwindzie) {
+                osoba.y -= predkosc;
+            }
+        }
+        else if (y > cel * 125 + predkosc) {
+            y -= predkosc;
+            for (auto& osoba : osobywwindzie) {
+                osoba.y += predkosc;
+            }
+        }
         else {
             pietro = cel;
             stop = 1;
@@ -75,6 +84,30 @@ class WINDA {
                     
 
             }
+            for (auto& osoba : osobywwindzie) {
+                if (osoba.cel == pietro) {
+                    if (pietro % 2 == 0)
+                    {
+                        osoba.kierunek = 'l';
+                        osoba.xCel = osoba.x - 250;
+                    }
+                    else
+                    {
+                        osoba.kierunek = 'p';
+                        osoba.xCel = osoba.x + 250;
+                    }
+
+                    kolejka[pietro].push_back(osoba);
+                }               
+            }
+            osobywwindzie.erase(
+                std::remove_if(
+                    osobywwindzie.begin(),
+                    osobywwindzie.end(),
+                    [&](osoba const& osoba) { return (osoba.cel==pietro); }
+                ),
+                osobywwindzie.end()
+            );
         }
         for (auto& osoba : kolejka[pietro])
         {
@@ -82,25 +115,27 @@ class WINDA {
             {
             case 'l':
                 osoba.x -= predkosc;
-                if (osoba.x <= osoba.xCel)
+                if (osoba.x <= osoba.xCel && osoba.cel != pietro)
                 {
                     osobywwindzie.push_back(osoba);
+                    cel = osoba.cel;
                 }break;
             case 'p':
                 osoba.x += predkosc;
-                if (osoba.x >= osoba.xCel)
+                if (osoba.x >= osoba.xCel && osoba.cel != pietro)
                 {
                     osobywwindzie.push_back(osoba);
+                    cel = osoba.cel;
                 }break;
             }
 
         }
-        //algorytm usuwajacy ludki z windy
+        //algorytm usuwajacy ludka z pietra
         kolejka[pietro].erase(
             std::remove_if(
                 kolejka[pietro].begin(),
                 kolejka[pietro].end(),
-                [](osoba const& osoba) { return (osoba.x <= osoba.xCel && osoba.kierunek== 'l') || (osoba.x >= osoba.xCel && osoba.kierunek =='p'); }
+                [](osoba const& osoba) { return (osoba.x <= osoba.xCel && osoba.kierunek == 'l') || (osoba.x >= osoba.xCel && osoba.kierunek == 'p'); }
             ),
             kolejka[pietro].end()
         );
@@ -123,7 +158,6 @@ HINSTANCE hInst;                                // bieżące wystąpienie
 WCHAR szTitle[MAX_LOADSTRING];                  // Tekst paska tytułu
 WCHAR szWindowClass[MAX_LOADSTRING];            // nazwa klasy okna głównego
 WINDA winda;
-
 
 // Przekaż dalej deklaracje funkcji dołączone w tym module kodu:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
