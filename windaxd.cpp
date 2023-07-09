@@ -39,7 +39,7 @@ public:
         waga = 0;
         cel = 0;
         pietro = 0;
-
+        max_waga = 600;
     }
 
     int wybierz_pietro(int cel) {
@@ -64,11 +64,78 @@ public:
         std::vector<int> seek_sequence;
         int head = pietro;
 
-    void ruch(std::vector<osoba> *kolejka) {
-              
-       
-        if (y < cel * 125 - predkosc) y += predkosc;
-        else if (y > cel * 125 + predkosc) y -= predkosc;
+        for (int i = 0; i < wezwania.size(); i++) {
+            if (wezwania[i] < head)
+                dol.push_back(wezwania[i]);
+            if (wezwania[i] > head)
+                gora.push_back(wezwania[i]);
+        }
+
+        // sorting dol and gora vectors
+        std::sort(dol.begin(), dol.end());
+        std::sort(gora.begin(), gora.end());
+
+        wezwania.clear();
+        // run the while loop two times.
+        // one by one scanning gora
+        // and dol of the head
+        int run = 2;
+        while (run--) {
+            if (!kierunek) {
+                for (int i = dol.size() - 1; i >= 0; i--) {
+                    cur_track = dol[i];
+
+                    // appending current track to seek sequence
+                    wezwania.push_back(cur_track);
+
+                    // calculate absolute distance
+                    distance = abs(cur_track - head);
+
+                    // increase the total count
+                    seek_count += distance;
+
+                    // accessed track is now the new head
+                    head = cur_track;
+                }
+                kierunek = 1;
+            }
+            else if (kierunek) {
+                for (int i = 0; i < gora.size(); i++) {
+                    cur_track = gora[i];
+                    // appending current track to seek sequence
+                    wezwania.push_back(cur_track);
+
+                    // calculate absolute distance
+                    distance = abs(cur_track - head);
+
+                    // increase the total count
+                    seek_count += distance;
+
+                    // accessed track is now new head
+                    head = cur_track;
+                }
+                kierunek = 0;
+            }
+        }
+    }
+    void dodaj_wezwanie(int wezwanie) {
+        wezwania.push_back(wezwanie);
+        posortuj_wezwania();
+    }
+    void ruch(std::vector<osoba>* kolejka) {
+        if (waga >= max_waga) return;
+        if (y < cel * 125 - predkosc) {
+            y += predkosc;
+            for (auto& osoba : osobywwindzie) {
+                osoba.y -= predkosc;
+            }
+        }
+        else if (y > cel * 125 + predkosc) {
+            y -= predkosc;
+            for (auto& osoba : osobywwindzie) {
+                osoba.y += predkosc;
+            }
+        }
         else {
             pietro = cel;
             if (!wezwania.empty() && wezwania.front() == pietro) {
@@ -91,9 +158,33 @@ public:
                         osoba.xCel = osoba.x - 250;
                     }
                 }
-                    
+
 
             }
+            for (auto& osoba : osobywwindzie) {
+                if (osoba.cel == pietro) {
+                    if (pietro % 2 == 0)
+                    {
+                        osoba.kierunek = 'l';
+                        osoba.xCel = osoba.x - 250;
+                    }
+                    else
+                    {
+                        osoba.kierunek = 'p';
+                        osoba.xCel = osoba.x + 250;
+                    }
+                    waga -= osoba.waga;
+                    kolejka[pietro].push_back(osoba);
+                }
+            }
+            osobywwindzie.erase(
+                std::remove_if(
+                    osobywwindzie.begin(),
+                    osobywwindzie.end(),
+                    [&](osoba const& osoba) { return (osoba.cel == pietro); }
+                ),
+                osobywwindzie.end()
+            );
         }
         for (auto& osoba : kolejka[pietro])
         {
@@ -104,12 +195,17 @@ public:
                 if (osoba.x <= osoba.xCel && osoba.cel != pietro)
                 {
                     osobywwindzie.push_back(osoba);
+                    dodaj_wezwanie(osoba.cel);
+                    waga += osoba.waga;
+
                 }break;
             case 'p':
                 osoba.x += predkosc;
                 if (osoba.x >= osoba.xCel && osoba.cel != pietro)
                 {
                     osobywwindzie.push_back(osoba);
+                    dodaj_wezwanie(osoba.cel);
+                    waga += osoba.waga;
                 }break;
             }
 
@@ -330,6 +426,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+    static ULONGLONG ostatniaAktywnosc = 0;
     switch (message)
     {
     case WM_COMMAND:
@@ -361,6 +458,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             for (int i = 0; i < 5; i++) {
                 kolejka[i].clear();
             }
+            ostatniaAktywnosc = 0;
             break;
         default:
             return DefWindowProc(hWnd, message, wParam, lParam);
@@ -371,7 +469,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
         winda.ruch(kolejka);
         InvalidateRect(hWnd, NULL, TRUE);
-
+        if (winda.wezwania.empty() && winda.pietro != 0) {
+            ostatniaAktywnosc += 15;
+        }
+        else {
+            ostatniaAktywnosc = 0;
+        }
+        if (ostatniaAktywnosc > 4500) {
+            winda.dodaj_wezwanie(0);
+        }
     }
     break;
     case WM_PAINT:
@@ -461,13 +567,13 @@ void Rysuj(HDC HDC) {
         grafika.DrawImage(&ludzik, kontener);
     }
 
-    TextOut(HDC, 200, 0, L"Waga:", 5);
+    TextOut(HDC, 100, 0, L"Waga:", 5);
     wchar_t buffer[256];
     int cyfry = floor(log10(winda.waga) + 1) + 1;
     wsprintfW(buffer, L"%d", winda.waga);
-    TextOut(HDC, 250, 0, buffer, cyfry);
+    TextOut(HDC, 150, 0, buffer, cyfry);
     if (winda.waga >= winda.max_waga) {
-        TextOut(HDC, 300, 0, L"Upsi!", 20);
+        TextOut(HDC, 200, 0, L"Maksymalna waga przekroczona skorzystaj ze schodów i powiadom pogotowie dźwigowe", 81);
     }
 
 };
