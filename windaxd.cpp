@@ -7,7 +7,7 @@
 #define MAX_LOADSTRING 100
 
 
-#define predkosc 4
+#define predkosc 5
 
 class osoba
 {
@@ -18,8 +18,8 @@ public:
         this->x = x;
         this->y = y;
         this->waga = 70;
-        this->kierunek = 's';//s-stop,g-gora,d-dol,l-lewo,p-pizda
-        
+        this->kierunek = 's';//s-stop,g-gora,d-dol,l-lewo,p-prawo
+
     }
     int x;
     int y;
@@ -32,31 +32,117 @@ public:
 std::vector<osoba> kolejka[5];
 
 class WINDA {
-    public:
+public:
     WINDA() {
         y = 0;
         kierunek = 1;
-        stop = 0;
         waga = 0;
         cel = 0;
         pietro = 0;
-
+        max_waga = 600;
     }
 
     int wybierz_pietro(int cel) {
-        stop = 0;
         this->cel = cel;
         return cel;
     }
+    void reset() {
+        y = 0;
+        kierunek = 1;
+        waga = 0;
+        cel = 0;
+        pietro = 0;
+        max_waga = 600;
+        osobywwindzie.clear();
+        wezwania.clear();
+    }
+    //bazowane na https://www.geeksforgeeks.org/scan-elevator-disk-scheduling-algorithms/
+    void posortuj_wezwania() {
+        int seek_count = 0;
+        int distance, cur_track;
+        std::vector<int> dol, gora;
+        std::vector<int> seek_sequence;
+        int head = pietro;
 
-    void ruch(std::vector<osoba> *kolejka) {
-              
-       
-        if (y < cel * 125 - predkosc) y += predkosc;
-        else if (y > cel * 125 + predkosc) y -= predkosc;
+        for (int i = 0; i < wezwania.size(); i++) {
+            if (wezwania[i] < head)
+                dol.push_back(wezwania[i]);
+            if (wezwania[i] > head)
+                gora.push_back(wezwania[i]);
+        }
+
+        // sorting dol and gora vectors
+        std::sort(dol.begin(), dol.end());
+        std::sort(gora.begin(), gora.end());
+
+        wezwania.clear();
+        // run the while loop two times.
+        // one by one scanning gora
+        // and dol of the head
+        int run = 2;
+        while (run--) {
+            if (!kierunek) {
+                for (int i = dol.size() - 1; i >= 0; i--) {
+                    cur_track = dol[i];
+
+                    // appending current track to seek sequence
+                    wezwania.push_back(cur_track);
+
+                    // calculate absolute distance
+                    distance = abs(cur_track - head);
+
+                    // increase the total count
+                    seek_count += distance;
+
+                    // accessed track is now the new head
+                    head = cur_track;
+                }
+                kierunek = 1;
+            }
+            else if (kierunek) {
+                for (int i = 0; i < gora.size(); i++) {
+                    cur_track = gora[i];
+                    // appending current track to seek sequence
+                    wezwania.push_back(cur_track);
+
+                    // calculate absolute distance
+                    distance = abs(cur_track - head);
+
+                    // increase the total count
+                    seek_count += distance;
+
+                    // accessed track is now new head
+                    head = cur_track;
+                }
+                kierunek = 0;
+            }
+        }
+    }
+    void dodaj_wezwanie(int wezwanie) {
+        wezwania.push_back(wezwanie);
+        posortuj_wezwania();
+    }
+    void ruch(std::vector<osoba>* kolejka) {
+        if (waga >= max_waga) return;
+        if (y < cel * 125 - predkosc) {
+            y += predkosc;
+            for (auto& osoba : osobywwindzie) {
+                osoba.y -= predkosc;
+            }
+        }
+        else if (y > cel * 125 + predkosc) {
+            y -= predkosc;
+            for (auto& osoba : osobywwindzie) {
+                osoba.y += predkosc;
+            }
+        }
         else {
             pietro = cel;
-            stop = 1;
+            if (!wezwania.empty() && wezwania.front() == pietro) {
+                if (kierunek && pietro == *std::max_element(wezwania.begin(), wezwania.end())) kierunek = 0;
+                else if (kierunek && pietro == *std::min_element(wezwania.begin(), wezwania.end())) kierunek = 1;
+                wezwania.erase(wezwania.begin());
+            }
             for (auto& osoba : kolejka[pietro])
             {
                 if (osoba.kierunek == 's')
@@ -72,9 +158,33 @@ class WINDA {
                         osoba.xCel = osoba.x - 250;
                     }
                 }
-                    
+
 
             }
+            for (auto& osoba : osobywwindzie) {
+                if (osoba.cel == pietro) {
+                    if (pietro % 2 == 0)
+                    {
+                        osoba.kierunek = 'l';
+                        osoba.xCel = osoba.x - 250;
+                    }
+                    else
+                    {
+                        osoba.kierunek = 'p';
+                        osoba.xCel = osoba.x + 250;
+                    }
+                    waga -= osoba.waga;
+                    kolejka[pietro].push_back(osoba);
+                }
+            }
+            osobywwindzie.erase(
+                std::remove_if(
+                    osobywwindzie.begin(),
+                    osobywwindzie.end(),
+                    [&](osoba const& osoba) { return (osoba.cel == pietro); }
+                ),
+                osobywwindzie.end()
+            );
         }
         for (auto& osoba : kolejka[pietro])
         {
@@ -82,37 +192,45 @@ class WINDA {
             {
             case 'l':
                 osoba.x -= predkosc;
-                if (osoba.x <= osoba.xCel)
+                if (osoba.x <= osoba.xCel && osoba.cel != pietro)
                 {
                     osobywwindzie.push_back(osoba);
+                    dodaj_wezwanie(osoba.cel);
+                    waga += osoba.waga;
+
                 }break;
             case 'p':
                 osoba.x += predkosc;
-                if (osoba.x >= osoba.xCel)
+                if (osoba.x >= osoba.xCel && osoba.cel != pietro)
                 {
                     osobywwindzie.push_back(osoba);
+                    dodaj_wezwanie(osoba.cel);
+                    waga += osoba.waga;
                 }break;
             }
 
         }
-        //algorytm usuwajacy ludki z windy
+        //algorytm usuwajacy ludka z pietra
         kolejka[pietro].erase(
             std::remove_if(
                 kolejka[pietro].begin(),
                 kolejka[pietro].end(),
-                [](osoba const& osoba) { return (osoba.x <= osoba.xCel && osoba.kierunek== 'l') || (osoba.x >= osoba.xCel && osoba.kierunek =='p'); }
+                [](osoba const& osoba) { return (osoba.x <= osoba.xCel && osoba.kierunek == 'l') || (osoba.x >= osoba.xCel && osoba.kierunek == 'p'); }
             ),
             kolejka[pietro].end()
         );
+        if (kolejka[pietro].empty() && !wezwania.empty()) {
+            cel = wezwania.front();
+        }
     }
     std::vector<osoba> osobywwindzie;
     int y;
     bool kierunek;
-    bool stop;
     int waga;
     int max_waga;
     int pietro;
     int cel;
+    std::vector<int> wezwania;
 };
 
 
@@ -123,7 +241,6 @@ HINSTANCE hInst;                                // bieżące wystąpienie
 WCHAR szTitle[MAX_LOADSTRING];                  // Tekst paska tytułu
 WCHAR szWindowClass[MAX_LOADSTRING];            // nazwa klasy okna głównego
 WINDA winda;
-
 
 // Przekaż dalej deklaracje funkcji dołączone w tym module kodu:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -138,19 +255,19 @@ void przycisk(int buttonid)
     int pietro;
     cel = buttonid % 10;
     pietro = buttonid / 10;
-    int x = (pietro % 2) * 600;
+    int x = (pietro % 2) * 600 + kolejka[pietro].size() * 30;
     int y = 625 - (pietro / 2) * 2 * 125 - (pietro % 2) * 125 - 512 / 6;
     osoba ludek(x, y, cel);
     kolejka[pietro].push_back(ludek);
-    winda.wybierz_pietro(pietro);
+    winda.dodaj_wezwanie(pietro);
 
 }
 
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
-                     _In_opt_ HINSTANCE hPrevInstance,
-                     _In_ LPWSTR    lpCmdLine,
-                     _In_ int       nCmdShow)
+    _In_opt_ HINSTANCE hPrevInstance,
+    _In_ LPWSTR    lpCmdLine,
+    _In_ int       nCmdShow)
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
@@ -168,7 +285,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     MyRegisterClass(hInstance);
 
     // Wykonaj inicjowanie aplikacji:
-    if (!InitInstance (hInstance, nCmdShow))
+    if (!InitInstance(hInstance, nCmdShow))
     {
         return FALSE;
     }
@@ -187,7 +304,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
     }
 
-    return (int) msg.wParam;
+    return (int)msg.wParam;
 }
 
 
@@ -203,17 +320,17 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 
     wcex.cbSize = sizeof(WNDCLASSEX);
 
-    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc    = WndProc;
-    wcex.cbClsExtra     = 0;
-    wcex.cbWndExtra     = 0;
-    wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_WINDAXD));
-    wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_WINDAXD);
-    wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc = WndProc;
+    wcex.cbClsExtra = 0;
+    wcex.cbWndExtra = 0;
+    wcex.hInstance = hInstance;
+    wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_WINDAXD));
+    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wcex.lpszMenuName = MAKEINTRESOURCEW(IDC_WINDAXD);
+    wcex.lpszClassName = szWindowClass;
+    wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
     return RegisterClassExW(&wcex);
 }
@@ -230,56 +347,68 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 //
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-   hInst = hInstance; // Przechowuj dojście wystąpienia w naszej zmiennej globalnej
+    hInst = hInstance; // Przechowuj dojście wystąpienia w naszej zmiennej globalnej
 
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+    HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+        CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
 
-   if (!hWnd)
-   {
-      return FALSE;
-   }
-   SetTimer(hWnd, 1, 33, NULL);    //33 uElapse = około 30 fps
+    if (!hWnd)
+    {
+        return FALSE;
+    }
+    SetTimer(hWnd, 1, 33, NULL);    //33 uElapse = około 30 fps
 
-   HWND hwndButton = CreateWindow(
-       L"BUTTON",  // Predefined class; Unicode assumed 
-       L"EXIT",      // Button text 
-       WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
-       800,         // x position 
-       0,           // y position 
-       50,        // Button width
-       20,        // Button height
-       hWnd,     // Parent window
-       (HMENU)555, 
-       (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE),
-       NULL);      // Pointer not needed.
+    HWND hwndButton = CreateWindow(
+        L"BUTTON",  // Predefined class; Unicode assumed 
+        L"EXIT",      // Button text 
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
+        800,         // x position 
+        0,           // y position 
+        50,        // Button width
+        20,        // Button height
+        hWnd,     // Parent window
+        (HMENU)555,
+        (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE),
+        NULL);      // Pointer not needed.
+    HWND hwndReset = CreateWindow(
+        L"BUTTON",  // Predefined class; Unicode assumed 
+        L"WYCZYŚĆ",      // Button text 
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
+        860,         // x position 
+        0,           // y position 
+        50,        // Button width
+        20,        // Button height
+        hWnd,     // Parent window
+        (HMENU)666,
+        (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE),
+        NULL);      // Pointer not needed.
 
-   for (int i = 0; i <= 4; i++) {
-       for (int przycisk_i = 4; przycisk_i >= 0; przycisk_i--) {
+    for (int i = 0; i <= 4; i++) {
+        for (int przycisk_i = 4; przycisk_i >= 0; przycisk_i--) {
 
-           int pietro = abs(i - 4);
-           if (pietro == przycisk_i) continue;
-           wchar_t buffer[256];
-           wsprintfW(buffer, L"%d", przycisk_i);
-           HWND hwndButton = CreateWindow(
-               L"BUTTON",  // Predefined class; Unicode assumed 
-               buffer,      // Button text 
-               WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
-               1 + (i % 2) * 655,         // x position 
-               125 + (i / 2) * 2 * 125 - (przycisk_i + 2) * 20 + (i % 2) * 125,  // y position 
-               20,        // Button width
-               20,        // Button height
-               hWnd,     // Parent window
-               (HMENU)(pietro * 10 + przycisk_i), //miejsce, cel
-               (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE),
-               NULL);      // Pointer not needed.
-       }
-   }
+            int pietro = abs(i - 4);
+            if (pietro == przycisk_i) continue;
+            wchar_t buffer[256];
+            wsprintfW(buffer, L"%d", przycisk_i);
+            HWND hwndButton = CreateWindow(
+                L"BUTTON",  // Predefined class; Unicode assumed 
+                buffer,      // Button text 
+                WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
+                1 + (i % 2) * 655,         // x position 
+                125 + (i / 2) * 2 * 125 - (przycisk_i + 2) * 20 + (i % 2) * 125,  // y position 
+                20,        // Button width
+                20,        // Button height
+                hWnd,     // Parent window
+                (HMENU)(pietro * 10 + przycisk_i), //miejsce, cel
+                (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE),
+                NULL);      // Pointer not needed.
+        }
+    }
 
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
+    ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
 
-   return TRUE;
+    return TRUE;
 }
 
 
@@ -300,35 +429,40 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_COMMAND:
-        {
-            int wmId = LOWORD(wParam);
-            for (int i = 0; i <= 4; i++) {
-                for (int przycisk_i = 4; przycisk_i >= 0; przycisk_i--) {
-                    int pietro = abs(i - 4);
-                    if (pietro == przycisk_i) continue;
-                    if (wmId == pietro * 10 + przycisk_i) 
+    {
+        int wmId = LOWORD(wParam);
+        for (int i = 0; i <= 4; i++) {
+            for (int przycisk_i = 4; przycisk_i >= 0; przycisk_i--) {
+                int pietro = abs(i - 4);
+                if (pietro == przycisk_i) continue;
+                if (wmId == pietro * 10 + przycisk_i)
                     przycisk(wmId);
 
-                }
-            }
-            // Analizuj zaznaczenia menu:
-            switch (wmId)
-            {
-            case IDM_ABOUT:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-                break;
-            case IDM_EXIT:
-                DestroyWindow(hWnd);
-                break;
-            case 555:
-                exit(0);
-                break;
-
-            default:
-                return DefWindowProc(hWnd, message, wParam, lParam);
             }
         }
-        break;
+        // Analizuj zaznaczenia menu:
+        switch (wmId)
+        {
+        case IDM_ABOUT:
+            DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+            break;
+        case IDM_EXIT:
+            DestroyWindow(hWnd);
+            break;
+        case 555:
+            exit(0);
+            break;
+        case 666:
+            winda.reset();
+            for (int i = 0; i < 5; i++) {
+                kolejka[i].clear();
+            }
+            break;
+        default:
+            return DefWindowProc(hWnd, message, wParam, lParam);
+        }
+    }
+    break;
     case WM_TIMER:
     {
         winda.ruch(kolejka);
@@ -337,8 +471,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     }
     break;
     case WM_PAINT:
-        {
-            
+    {
+
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hWnd, &ps);
         // TODO: Tutaj dodaj kod rysujący używający elementu hdc...
@@ -369,9 +503,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         DeleteObject(bmp); // delete bitmap since it is no longer required
         DeleteDC(memDC);   // delete memory DC since it is no longer required
         EndPaint(hWnd, &ps);
-            
-        }
-        break;
+
+    }
+    break;
     case WM_ERASEBKGND:
         return 1;
         break;
@@ -411,17 +545,27 @@ void Rysuj(HDC HDC) {
     Bitmap ludzik(L"ludzik.png");
     for (int i = 0; i < 5; i++)
     {
-        for (auto ludek : kolejka[i])
+        for (auto& ludek : kolejka[i])
         {
             Rect kontener(ludek.x, ludek.y, ludzik.GetWidth() / 7, ludzik.GetHeight() / 6);
             grafika.DrawImage(&ludzik, kontener);
         }
     }
-    for (auto ludek : winda.osobywwindzie)
+    for (auto& ludek : winda.osobywwindzie)
     {
         Rect kontener(ludek.x, ludek.y, ludzik.GetWidth() / 7, ludzik.GetHeight() / 6);
         grafika.DrawImage(&ludzik, kontener);
     }
+
+    TextOut(HDC, 200, 0, L"Waga:", 5);
+    wchar_t buffer[256];
+    int cyfry = floor(log10(winda.waga) + 1) + 1;
+    wsprintfW(buffer, L"%d", winda.waga);
+    TextOut(HDC, 250, 0, buffer, cyfry);
+    if (winda.waga >= winda.max_waga) {
+        TextOut(HDC, 300, 0, L"Upsi!", 20);
+    }
+
 };
 
 
